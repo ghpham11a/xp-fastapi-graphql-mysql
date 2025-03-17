@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xp-fastapi-graphql-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: xp-fastapi-graphql-mysql
+  template:
+    metadata:
+      labels:
+        app: xp-fastapi-graphql-mysql
+    spec:
+      containers:
+        - name: xp-fastapi-graphql-mysql
+          image: xp-fastapi-graphql-mysql:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: xp-fastapi-graphql-mysql-configmap
+          env:
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: xp-fastapi-graphql-mysql-secrets
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: xp-fastapi-graphql-mysql-secrets
+                  key: MYSQL_PASSWORD
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name

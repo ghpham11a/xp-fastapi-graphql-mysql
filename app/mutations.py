@@ -1,55 +1,79 @@
 import uuid
-from datetime import datetime
-from typing import List, Optional
-
 import strawberry
+from datetime import datetime
+from typing import Optional
+
+from app.models import Account
 
 @strawberry.type
 class Mutation:
-
+    
     @strawberry.mutation
-    def create_account(
+    async def create_account(
         self,
+        info: strawberry.Info,
         email: str,
         date_of_birth: datetime,
         account_number: str,
         initial_balance: float = 0.0
     ) -> Account:
-        """
-        Create a new account.
+        request = info.context["request"]
+        pool = request.app.state.pool
+
+        new_id = str(uuid.uuid4())
+        created_at = datetime.now(datetime.timezone.utc)
+
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                sql = """
+                INSERT INTO Accounts (Id, Email, DateOfBirth, AccountNumber, Balance, CreatedAt)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                await cur.execute(sql, (
+                    new_id,
+                    email,
+                    date_of_birth,
+                    account_number,
+                    initial_balance,
+                    created_at
+                ))
+                # If autocommit=False for your pool, call conn.commit() here.
         
-        - Automatically generates a UUID for the `id`.
-        - Sets `created_at` to the current time.
-        """
-        new_account = Account(
-            id=str(uuid.uuid4()),
+        return Account(
+            id=new_id,
             email=email,
             date_of_birth=date_of_birth,
             account_number=account_number,
             balance=initial_balance,
-            created_at=datetime.utcnow()
+            created_at=created_at
         )
-        ACCOUNTS_DB.append(new_account)
-        return new_account
 
     @strawberry.mutation
-    def update_balance(self, id: str, new_balance: float) -> Optional[Account]:
-        """
-        Update the balance of the account with the given ID.
-        Returns the updated account or None if not found.
-        """
-        for account in ACCOUNTS_DB:
-            if account.id == id:
-                # Replace the old Account object with an updated version
-                updated_account = Account(
-                    id=account.id,
-                    email=account.email,
-                    date_of_birth=account.date_of_birth,
-                    account_number=account.account_number,
+    async def update_balance(self, info: strawberry.Info, id: str, new_balance: float) -> Optional[Account]:
+        request = info.context["request"]
+        pool = request.app.state.pool
+
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                # 1) Fetch existing record
+                await cur.execute("SELECT Id, Email, DateOfBirth, AccountNumber, Balance, CreatedAt FROM Accounts WHERE id=%s", (id,))
+                row = await cur.fetchone()
+                if not row:
+                    return None  # No record found
+
+                # 2) Update
+                sql_update = "UPDATE Accounts SET balance=%s WHERE id=%s"
+                await cur.execute(sql_update, (new_balance, id))
+
+                # If autocommit=False for your pool, call conn.commit() here
+
+                # 3) Rebuild the object for returning
+                (id_, email, dob, account_num, old_balance, created_at) = row
+                return Account(
+                    id=id_,
+                    email=email,
+                    date_of_birth=dob,
+                    account_number=account_num,
                     balance=new_balance,
-                    created_at=account.created_at
+                    created_at=created_at
                 )
-                index = ACCOUNTS_DB.index(account)
-                ACCOUNTS_DB[index] = updated_account
-                return updated_account
-        return None

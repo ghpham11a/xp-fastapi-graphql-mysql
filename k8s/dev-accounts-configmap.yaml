@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: xp-fastapi-graphql-mysql-configmap
+data:
+  # MYSQL_HOST: "jdbc:mysql://xp-mysql.default.svc.cluster.local:3306/my_database"
+  MYSQL_HOST: "xp-mysql.default.svc.cluster.local"
+  MYSQL_PORT: "3306"
+  MYSQL_DB: "my_database"
